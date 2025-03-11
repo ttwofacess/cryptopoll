@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Encuesta sobre Criptomonedas</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <h1 id="title">Encuesta sobre Criptomonedas</h1>
+            <p id="description">Ayúdanos a entender mejor el mercado de las criptomonedas</p>
+        </header>
+        <form id="survey-form">
+            <div class="form-group">
+                <label id="name-label" for="name">Nombre</label>
+                <input type="text" id="name" name="name" placeholder="Introduce tu nombre" required>
+            </div>
+            <div class="form-group">
+                <label id="email-label" for="email">Correo Electrónico</label>
+                <input type="email" id="email" name="email" placeholder="Introduce tu correo electrónico" required>
+            </div>
+            <div class="form-group">
+                <label id="number-label" for="number">Edad <span class="clue">(opcional)</span></label>
+                <input type="number" id="number" name="age" min="10" max="99" placeholder="Edad">
+            </div>
+            <div class="form-group">
+                <p>¿Cuál es tu criptomoneda favorita?</p>
+                <select id="dropdown" name="role" required>
+                    <option disabled selected value>Selecciona una opción</option>
+                    <option value="bitcoin">Bitcoin (BTC)</option>
+                    <option value="ethereum">Ethereum (ETH)</option>
+                    <option value="cardano">Litecoin (LTC)</option>
+                    <option value="binance-coin">Binance Coin (BNB)</option>
+                    <option value="solana">Solana (SOL)</option>
+                    <option value="other">Otra</option>
+                </select>
+            </div>
+            <div class="form-group">
+                <p>¿Con qué frecuencia inviertes en criptomonedas?</p>
+                <label>
+                    <input type="radio" name="frequency" value="daily" class="input-radio"> Diariamente
+                </label>
+                <label>
+                    <input type="radio" name="frequency" value="weekly" class="input-radio"> Semanalmente
+                </label>
+                <label>
+                    <input type="radio" name="frequency" value="monthly" class="input-radio"> Mensualmente
+                </label>
+                <label>
+                    <input type="radio" name="frequency" value="rarely" class="input-radio"> Raramente
+                </label>
+            </div>
+            <div class="form-group">
+                <p>¿Qué características valoras más en una criptomoneda? <span class="clue">(Puedes seleccionar más de una opción)</span></p>
+                <label>
+                    <input type="checkbox" name="prefer" value="security" class="input-checkbox"> Seguridad
+                </label>
+                <label>
+                    <input type="checkbox" name="prefer" value="scalability" class="input-checkbox"> Escalabilidad
+                </label>
+                <label>
+                    <input type="checkbox" name="prefer" value="decentralization" class="input-checkbox"> Descentralización
+                </label>
+                <label>
+                    <input type="checkbox" name="prefer" value="transaction-speed" class="input-checkbox"> Velocidad de transacción
+                </label>
+                <label>
+                    <input type="checkbox" name="prefer" value="community" class="input-checkbox"> Comunidad
+                </label>
+            </div>
+            <div class="form-group">
+                <p>¿Algún comentario o sugerencia?</p>
+                <textarea id="comments" name="comment" placeholder="Introduce tu comentario aquí..."></textarea>
+            </div>
+            <div class="form-group">
+                <button type="submit" id="submit" class="submit-button">Enviar</button>
+            </div>
+        </form>
+    </div>
+</body>
+</html>
