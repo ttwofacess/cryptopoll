@@ -12,10 +12,11 @@ document.getElementById('survey-form').addEventListener('submit', async (e) => {
     };
 
     try {
-        const response = await fetch('/api/submit', {
+        const response = await fetch('https://cryptopoll.pages.dev/api/submit', {
             method: 'POST',
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                'Accept': 'application/json'
             },
             body: JSON.stringify(formData)
         });
