@@ -1,45 +1,89 @@
 // functions/submit.js
 import { createClient } from "@libsql/client";
 
-// La función onRequestPost se ejecuta cuando llega una petición POST a /submit
+// Función auxiliar para validar el nombre (puedes hacerla más compleja si necesitas)
+function isValidName(name) {
+    if (!name || typeof name !== 'string') {
+        return false;
+    }
+    const trimmedName = name.trim();
+    // 1. No vacío después de quitar espacios
+    if (trimmedName.length === 0) {
+        return false;
+    }
+    // 2. Longitud razonable (ej. máximo 100 caracteres)
+    if (trimmedName.length > 100) {
+        return false;
+    }
+    // 3. (Opcional) Verificar caracteres permitidos.
+    //    Este regex permite letras (incluyendo acentos comunes), espacios, apóstrofes y guiones.
+    //    Ajusta según tus necesidades específicas. ¡Cuidado con ser demasiado restrictivo!
+    const nameRegex = /^[a-zA-ZÀ-ÿ\s'-]+$/;
+    if (!nameRegex.test(trimmedName)) {
+        // Podrías querer loggear qué caracter falló aquí para depuración
+        console.warn(`Invalid characters detected in name: ${trimmedName}`);
+        return false;
+    }
+
+    return true; // Pasa todas las validaciones
+}
+
+
 export async function onRequestPost({ request, env }) {
     try {
-        // 1. Parsear los datos JSON del cuerpo de la petición
         const data = await request.json();
 
-        // Validaciones básicas (puedes añadir más)
-        if (!data.name || !data.email || !data.role) {
-             return new Response(JSON.stringify({ error: 'Faltan campos obligatorios (nombre, email, cripto favorita).' }), {
+        // --- INICIO: Validaciones y Sanitización para 'name' ---
+
+        // Sanitización básica: quitar espacios al inicio y al final
+        const sanitizedName = data.name ? data.name.trim() : null;
+
+        // Validación
+        if (!isValidName(sanitizedName)) {
+             return new Response(JSON.stringify({
+                 error: 'Nombre inválido. Asegúrate de que no esté vacío, no exceda los 100 caracteres y contenga caracteres válidos.'
+             }), {
+                status: 400, // Bad Request
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        // Usar el nombre sanitizado de ahora en adelante
+        data.name = sanitizedName;
+
+        // --- FIN: Validaciones y Sanitización para 'name' ---
+
+
+        // Validaciones básicas para otros campos obligatorios
+        if (!data.email || !data.role) { // Ya no necesitamos chequear data.name aquí porque lo hicimos antes
+             return new Response(JSON.stringify({ error: 'Faltan campos obligatorios (email, cripto favorita).' }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
+        // (Opcional) Podrías añadir validaciones similares para email, age, etc.
 
-        // 2. Crear cliente de Turso usando las variables de entorno
-        // Estas variables (TURSO_DATABASE_URL y TURSO_AUTH_TOKEN)
-        // DEBEN configurarse en el dashboard de Cloudflare Pages.
+        // 2. Crear cliente de Turso
         const client = createClient({
             url: env.TURSO_DATABASE_URL,
             authToken: env.TURSO_AUTH_TOKEN,
         });
 
-        // 3. Insertar datos en la base de datos (usando transacción para consistencia)
+        // 3. Insertar datos en la base de datos (usando transacción)
         const tx = await client.transaction('write');
         try {
-            // Insertar usuario y obtener ID
+            // Insertar usuario y obtener ID (usando data.name ya sanitizado)
             const userResult = await tx.execute({
                 sql: "INSERT INTO users (name, email, age) VALUES (?, ?, ?) RETURNING id;",
-                args: [data.name, data.email, data.age ?? null], // Usar null si age no viene
+                args: [data.name, data.email, data.age ?? null],
             });
             const userId = userResult.rows[0].id;
 
-            // Insertar preferencia de criptomoneda
-            await tx.execute({
+            // ... (resto de las inserciones sin cambios) ...
+             await tx.execute({
                 sql: "INSERT INTO cryptocurrency_preferences (user_id, cryptocurrency) VALUES (?, ?);",
                 args: [userId, data.role],
             });
 
-            // Insertar frecuencia de inversión (si se proporcionó)
             if (data.frequency) {
                 await tx.execute({
                     sql: "INSERT INTO investment_frequency (user_id, frequency) VALUES (?, ?);",
@@ -47,7 +91,6 @@ export async function onRequestPost({ request, env }) {
                 });
             }
 
-            // Insertar características valoradas (si se proporcionaron)
             if (data.prefer && data.prefer.length > 0) {
                 for (const characteristic of data.prefer) {
                     await tx.execute({
@@ -57,42 +100,50 @@ export async function onRequestPost({ request, env }) {
                 }
             }
 
-            // Insertar comentario (si se proporcionó)
             if (data.comment && data.comment.trim() !== '') {
                  await tx.execute({
                     sql: "INSERT INTO comments (user_id, comment) VALUES (?, ?);",
-                    args: [userId, data.comment],
+                    // Aplicar trim también al comentario por consistencia
+                    args: [userId, data.comment.trim()],
                 });
             }
 
-            // Confirmar la transacción
+
             await tx.commit();
 
         } catch (dbError) {
-            // Si algo falla en la DB, deshacer la transacción
             await tx.rollback();
             console.error("Database Error:", dbError);
-            // Devolver un error más específico si es posible
              return new Response(JSON.stringify({ error: 'Error al guardar en la base de datos.', details: dbError.message }), {
                 status: 500,
                 headers: { 'Content-Type': 'application/json' },
             });
         } finally {
-            // Cerrar cliente (importante en entornos serverless de larga duración, aunque aquí es menos crítico)
             client.close();
         }
 
-        // 4. Enviar respuesta de éxito al frontend
+        // 4. Enviar respuesta de éxito
         return new Response(JSON.stringify({ success: true, message: "Datos recibidos y guardados." }), {
             status: 200,
             headers: { 'Content-Type': 'application/json' },
         });
 
     } catch (error) {
-        // Capturar errores generales (ej. JSON mal formado)
+        // Capturar errores generales (ej. JSON mal formado o error en isValidName)
         console.error("Function Error:", error);
-         return new Response(JSON.stringify({ error: 'Error interno del servidor.', details: error.message }), {
-            status: 500,
+         // Distinguir si el error es por JSON mal formado
+         let errorMessage = 'Error interno del servidor.';
+         let errorStatus = 500;
+         if (error instanceof SyntaxError) {
+             errorMessage = 'Error en el formato del JSON enviado.';
+             errorStatus = 400; // Bad Request si el JSON está mal
+         } else if (error.message.includes('invalid name')) { // Ejemplo si lanzaras errores específicos
+             errorMessage = error.message;
+             errorStatus = 400;
+         }
+
+         return new Response(JSON.stringify({ error: errorMessage, details: error.message }), {
+            status: errorStatus,
             headers: { 'Content-Type': 'application/json' },
         });
     }

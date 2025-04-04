@@ -8,6 +8,31 @@ document.getElementById('survey-form').addEventListener('submit', async function
     submitButton.disabled = true;
     submitButton.textContent = 'Enviando...';
 
+    //Validaciones para name
+    const nameInput = document.getElementById('name');
+    const nameValue = nameInput.value.trim();
+
+    if (nameValue.length === 0) {
+        alert('Por favor, introduce tu nombre.');
+        submitButton.disabled = false; // Habilitar botón de nuevo
+        submitButton.textContent = originalButtonText;
+        return; // Detener el envío
+    }
+    if (nameValue.length > 100) {
+        alert('El nombre no puede exceder los 100 caracteres.');
+        submitButton.disabled = false;
+        submitButton.textContent = originalButtonText;
+        return;
+    }
+    // Opcional: Regex check similar al backend
+    const nameRegex = /^[a-zA-ZÀ-ÿ\s'-]+$/;
+    if (!nameRegex.test(nameValue)) {
+        alert('El nombre contiene caracteres no válidos.');
+        submitButton.disabled = false;
+        submitButton.textContent = originalButtonText;
+        return;
+    }
+
     // 1. Recolectar datos del formulario
     const formData = new FormData(this);
     const data = {};
