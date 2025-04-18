@@ -39,7 +39,9 @@ export async function onRequestPost({ request, env }) {
         // const sanitizedName = data.name ? data.name.trim() : null;
 
         // Sanitización básica: verificar que sea string y quitar espacios
-        const sanitizedName = typeof data.name === 'string' ? data.name.trim() : String(data.name).trim();
+        // const sanitizedName = typeof data.name === 'string' ? data.name.trim() : String(data.name).trim();
+        const sanitizedName = data.name === null ? null : 
+    (typeof data.name === 'string' ? data.name.trim() : String(data.name).trim());
 
         // Validación
         if (!isValidName(sanitizedName)) {
