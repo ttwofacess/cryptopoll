@@ -1,31 +1,58 @@
 // functions/submit.js
 import { createClient } from "@libsql/client";
 
-// Función auxiliar para validar el nombre (puedes hacerla más compleja si necesitas)
+// --- START: Email Validation Function ---
+function isValidEmail(email) {
+    if (!email || typeof email !== 'string') {
+        return false;
+    }
+    const trimmedEmail = email.trim();
+    // 1. No vacío después de quitar espacios
+    if (trimmedEmail.length === 0) {
+        return false;
+    }
+    // 2. Longitud razonable (ej. máximo 254 caracteres - estándar común)
+    if (trimmedEmail.length > 254) {
+        return false;
+    }
+    // 3. Formato básico de email usando Regex.
+    //    Este regex es común pero no cubre el 100% de casos RFC (que son muy complejos).
+    //    Es un buen balance entre precisión y practicidad.
+    //    Permite: a-z A-Z 0-9 . _ % + - antes del @
+    //    Permite: a-z A-Z 0-9 . - después del @
+    //    Requiere: Al menos un punto en el dominio y al menos 2 letras al final (TLD).
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(trimmedEmail)) {
+        console.warn(`Invalid email format detected: ${trimmedEmail}`);
+        return false;
+    }
+
+    // (Opcional) Podrías añadir chequeos más avanzados si es necesario
+    // como verificar si el dominio existe (requiere llamadas externas, más complejo).
+
+    return true; // Pasa todas las validaciones
+}
+// --- END: Email Validation Function ---
+
+
+// Función auxiliar para validar el nombre (sin cambios)
 function isValidName(name) {
     if (!name || typeof name !== 'string') {
         return false;
     }
     const trimmedName = name.trim();
-    // 1. No vacío después de quitar espacios
     if (trimmedName.length === 0) {
         return false;
     }
-    // 2. Longitud razonable (ej. máximo 100 caracteres)
     if (trimmedName.length > 100) {
         return false;
     }
-    // 3. (Opcional) Verificar caracteres permitidos.
-    //    Este regex permite letras (incluyendo acentos comunes), espacios, apóstrofes y guiones.
-    //    Ajusta según tus necesidades específicas. ¡Cuidado con ser demasiado restrictivo!
     const nameRegex = /^[a-zA-ZÀ-ÿ\s'-]+$/;
     if (!nameRegex.test(trimmedName)) {
-        // Podrías querer loggear qué caracter falló aquí para depuración
         console.warn(`Invalid characters detected in name: ${trimmedName}`);
         return false;
     }
-
-    return true; // Pasa todas las validaciones
+    return true;
 }
 
 
@@ -34,38 +61,48 @@ export async function onRequestPost({ request, env }) {
         const data = await request.json();
 
         // --- INICIO: Validaciones y Sanitización para 'name' ---
+        const sanitizedName = data.name === null ? null :
+            (typeof data.name === 'string' ? data.name.trim() : String(data.name).trim());
 
-        // Sanitización básica: quitar espacios al inicio y al final
-        // const sanitizedName = data.name ? data.name.trim() : null;
-
-        // Sanitización básica: verificar que sea string y quitar espacios
-        // const sanitizedName = typeof data.name === 'string' ? data.name.trim() : String(data.name).trim();
-        const sanitizedName = data.name === null ? null : 
-    (typeof data.name === 'string' ? data.name.trim() : String(data.name).trim());
-
-        // Validación
         if (!isValidName(sanitizedName)) {
              return new Response(JSON.stringify({
                  error: 'Nombre inválido. Asegúrate de que no esté vacío, no exceda los 100 caracteres y contenga caracteres válidos.'
              }), {
-                status: 400, // Bad Request
-                headers: { 'Content-Type': 'application/json' },
-            });
-        }
-        // Usar el nombre sanitizado de ahora en adelante
-        data.name = sanitizedName;
-
-        // --- FIN: Validaciones y Sanitización para 'name' ---
-
-
-        // Validaciones básicas para otros campos obligatorios
-        if (!data.email || !data.role) { // Ya no necesitamos chequear data.name aquí porque lo hicimos antes
-             return new Response(JSON.stringify({ error: 'Faltan campos obligatorios (email, cripto favorita).' }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-        // (Opcional) Podrías añadir validaciones similares para email, age, etc.
+        data.name = sanitizedName; // Usar nombre sanitizado
+        // --- FIN: Validaciones y Sanitización para 'name' ---
+
+
+        // --- INICIO: Validaciones y Sanitización para 'email' ---
+        // Sanitización básica: verificar que sea string y quitar espacios
+        const sanitizedEmail = typeof data.email === 'string' ? data.email.trim() : null;
+
+        // Validación
+        if (!isValidEmail(sanitizedEmail)) {
+            return new Response(JSON.stringify({
+                error: 'Correo electrónico inválido. Por favor, introduce un formato de email válido (ej. usuario@dominio.com) y asegúrate de que no exceda los 254 caracteres.'
+            }), {
+                status: 400, // Bad Request
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        // Usar el email sanitizado de ahora en adelante
+        data.email = sanitizedEmail;
+        // --- FIN: Validaciones y Sanitización para 'email' ---
+
+
+        // Validaciones básicas para otros campos obligatorios
+        // Ya no necesitamos chequear data.email aquí porque lo hicimos antes
+        if (!data.role) { // data.name y data.email ya fueron validados
+             return new Response(JSON.stringify({ error: 'Falta campo obligatorio (cripto favorita).' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        // (Opcional) Podrías añadir validaciones similares para age, etc.
 
         // 2. Crear cliente de Turso
         const client = createClient({
@@ -76,9 +113,10 @@ export async function onRequestPost({ request, env }) {
         // 3. Insertar datos en la base de datos (usando transacción)
         const tx = await client.transaction('write');
         try {
-            // Insertar usuario y obtener ID (usando data.name ya sanitizado)
+            // Insertar usuario y obtener ID (usando data.name y data.email ya sanitizados)
             const userResult = await tx.execute({
                 sql: "INSERT INTO users (name, email, age) VALUES (?, ?, ?) RETURNING id;",
+                // Usar los datos sanitizados
                 args: [data.name, data.email, data.age ?? null],
             });
             const userId = userResult.rows[0].id;
@@ -108,11 +146,9 @@ export async function onRequestPost({ request, env }) {
             if (data.comment && data.comment.trim() !== '') {
                  await tx.execute({
                     sql: "INSERT INTO comments (user_id, comment) VALUES (?, ?);",
-                    // Aplicar trim también al comentario por consistencia
                     args: [userId, data.comment.trim()],
                 });
             }
-
 
             await tx.commit();
 
@@ -134,15 +170,13 @@ export async function onRequestPost({ request, env }) {
         });
 
     } catch (error) {
-        // Capturar errores generales (ej. JSON mal formado o error en isValidName)
         console.error("Function Error:", error);
-         // Distinguir si el error es por JSON mal formado
          let errorMessage = 'Error interno del servidor.';
          let errorStatus = 500;
          if (error instanceof SyntaxError) {
              errorMessage = 'Error en el formato del JSON enviado.';
-             errorStatus = 400; // Bad Request si el JSON está mal
-         } else if (error.message.includes('invalid name')) { // Ejemplo si lanzaras errores específicos
+             errorStatus = 400;
+         } else if (error.message.includes('invalid name') || error.message.includes('invalid email')) { // Ejemplo si lanzaras errores específicos
              errorMessage = error.message;
              errorStatus = 400;
          }
