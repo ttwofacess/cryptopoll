@@ -65,6 +65,39 @@ document.getElementById('survey-form').addEventListener('submit', async function
         return;
     }
 
+    // --- START: Validaciones para age ---
+    const ageInput = document.getElementById('number'); // ID del input de edad
+    const ageValue = ageInput.value.trim();
+    const minAge = parseInt(ageInput.min, 10) || 10; // Obtener min del atributo HTML o usar 10 por defecto
+    const maxAge = parseInt(ageInput.max, 10) || 99; // Obtener max del atributo HTML o usar 99 por defecto
+
+    // Es opcional, así que solo validamos si se ha introducido algo
+    if (ageValue !== '') {
+        // Verificar si es un número entero
+        // Number.isInteger necesita un número, no un string, por eso Number(ageValue)
+        // isNaN verifica si NO es un número (útil para casos como "abc")
+        if (isNaN(ageValue) || !Number.isInteger(Number(ageValue))) {
+            alert('Por favor, introduce una edad válida (solo números enteros).');
+            submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
+            ageInput.focus();
+            return;
+        }
+
+        // Convertir a número para comparación de rango
+        const ageNum = parseInt(ageValue, 10);
+
+        // Verificar el rango usando los valores min/max del HTML
+        if (ageNum < minAge || ageNum > maxAge) {
+            alert(`La edad debe estar entre ${minAge} y ${maxAge}.`);
+            submitButton.disabled = false;
+            submitButton.textContent = originalButtonText;
+            ageInput.focus();
+            return;
+        }
+    }
+    // --- END: Validaciones para age ---
+
     // (Opcional) Añadir validaciones para otros campos requeridos si es necesario
     const roleSelect = document.getElementById('dropdown');
     if (!roleSelect.value) {

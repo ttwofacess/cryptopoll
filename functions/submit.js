@@ -55,6 +55,59 @@ function isValidName(name) {
     return true;
 }
 
+// --- START: Age Validation Function (Server-Side) ---
+function isValidAge(age) {
+    // Age is optional, so null or undefined is valid in terms of presence
+    if (age === null || age === undefined) {
+        return { isValid: true, value: null }; // Return null to store in DB
+    }
+
+    // If present, it must be a number or a string representing an integer
+    let parsedAge;
+    if (typeof age === 'number') {
+        if (!Number.isInteger(age)) {
+            console.warn(`Invalid age type: float number provided (${age})`);
+            return { isValid: false, error: 'La edad debe ser un número entero.' };
+        }
+        parsedAge = age;
+    } else if (typeof age === 'string') {
+        const trimmedAge = age.trim();
+        // Allow empty string as it's optional (will be treated as null)
+        if (trimmedAge === '') {
+             return { isValid: true, value: null };
+        }
+        // Check if it's a valid integer representation
+        if (!/^\d+$/.test(trimmedAge)) {
+             console.warn(`Invalid age format: non-integer string provided (${trimmedAge})`);
+             return { isValid: false, error: 'La edad debe contener solo números.' };
+        }
+        parsedAge = parseInt(trimmedAge, 10);
+        // Double check for potential issues like leading zeros if that matters,
+        // but parseInt handles standard integers well.
+        if (isNaN(parsedAge)) { // Should not happen with regex check, but safe belt
+             console.warn(`Invalid age parsing: string to NaN (${trimmedAge})`);
+             return { isValid: false, error: 'Formato de edad inválido.' };
+        }
+
+    } else {
+        // Not a number, string, null, or undefined - invalid type
+        console.warn(`Invalid age type: received type ${typeof age}`);
+        return { isValid: false, error: 'Tipo de dato inválido para la edad.' };
+    }
+
+    // Check range (define server-side limits)
+    const minAge = 10;
+    const maxAge = 99;
+    if (parsedAge < minAge || parsedAge > maxAge) {
+        console.warn(`Invalid age range: ${parsedAge} (must be between ${minAge}-${maxAge})`);
+        return { isValid: false, error: `La edad debe estar entre ${minAge} y ${maxAge}.` };
+    }
+
+    // If all checks pass
+    return { isValid: true, value: parsedAge };
+}
+// --- END: Age Validation Function (Server-Side) ---
+
 
 export async function onRequestPost({ request, env }) {
     try {
