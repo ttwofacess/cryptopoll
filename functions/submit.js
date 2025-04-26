@@ -62,6 +62,12 @@ function isValidAge(age) {
         return { isValid: true, value: null }; // Return null to store in DB
     }
 
+    // Manejar explícitamente el caso de booleanos
+    if (typeof age === 'boolean') {
+        console.warn(`Invalid age type: boolean provided (${age})`);
+        return { isValid: false, error: 'La edad debe ser un número entero.' };
+    }
+
     // If present, it must be a number or a string representing an integer
     let parsedAge;
     if (typeof age === 'number') {
