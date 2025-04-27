@@ -83,9 +83,9 @@ function isValidAge(age) {
              return { isValid: true, value: null };
         }
         // Check if it's a valid integer representation
-        if (!/^\d+$/.test(trimmedAge)) {
+        if (!/^\d+$/.test(trimmedAge) || trimmedAge.includes('.')) {
              console.warn(`Invalid age format: non-integer string provided (${trimmedAge})`);
-             return { isValid: false, error: 'La edad debe contener solo números.' };
+             return { isValid: false, error: 'La edad debe ser un número entero sin decimales.' };
         }
         parsedAge = parseInt(trimmedAge, 10);
         // Double check for potential issues like leading zeros if that matters,
