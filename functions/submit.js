@@ -76,13 +76,13 @@ function isValidAge(age) {
             console.warn(`Tipo de edad inválido: se proporcionó un valor infinito (${age})`);
             return { isValid: false, error: 'La edad debe ser un número entero válido.' };
         }
-        /* if (!Number.isInteger(age)) {
+        if (!Number.isInteger(age)) {
             console.warn(`Invalid age type: float number provided (${age})`);
             return { isValid: false, error: 'La edad debe ser un número entero.' };
         }
-        parsedAge = age; */
+        parsedAge = age; 
         // Sanitizar números eliminando decimales
-        if (!Number.isInteger(age)) {
+        /* if (!Number.isInteger(age)) {
             // Convertir a string y eliminar decimales
             const sanitizedAge = String(age).split('.')[0];
             console.warn(`Sanitizando edad decimal: ${age} -> ${sanitizedAge}`);
@@ -90,7 +90,7 @@ function isValidAge(age) {
             parsedAge = parseInt(sanitizedAge, 10);
         } else {
             parsedAge = age;
-        }
+        } */
     } else if (typeof age === 'string') {
         const trimmedAge = age.trim();
         // Allow empty string as it's optional (will be treated as null)
@@ -98,26 +98,26 @@ function isValidAge(age) {
              return { isValid: true, value: null };
         }
         // Sanitizar string eliminando decimales
-        const sanitizedAge = trimmedAge.split('.')[0];
+        // const sanitizedAge = trimmedAge.split('.')[0];
 
         // Check if it's a valid integer representation
-        /* if (!/^\d+$/.test(trimmedAge) || trimmedAge.includes('.')) {
+        if (!/^\d+$/.test(trimmedAge) || trimmedAge.includes('.')) {
              console.warn(`Invalid age format: non-integer string provided (${trimmedAge})`);
              return { isValid: false, error: 'La edad debe ser un número entero sin decimales.' };
-        } */
+        } 
        // Verificar que sea un número válido después de sanitizar
-       if (!/^\d+$/.test(sanitizedAge)) {
+       /* if (!/^\d+$/.test(sanitizedAge)) {
         console.warn(`Formato de edad inválido después de sanitizar: ${sanitizedAge}`);
         return { isValid: false, error: 'La edad debe contener solo números.' };
-        }
+        } */
 
-        // parsedAge = parseInt(trimmedAge, 10);
-        parsedAge = parseInt(sanitizedAge, 10);
+        parsedAge = parseInt(trimmedAge, 10);
+        // parsedAge = parseInt(sanitizedAge, 10);
         // Double check for potential issues like leading zeros if that matters,
         // but parseInt handles standard integers well.
         if (isNaN(parsedAge)) { // Should not happen with regex check, but safe belt
-            //  console.warn(`Invalid age parsing: string to NaN (${trimmedAge})`);
-            console.warn(`Error al parsear edad sanitizada: ${sanitizedAge}`);
+            console.warn(`Invalid age parsing: string to NaN (${trimmedAge})`);
+            // console.warn(`Error al parsear edad sanitizada: ${sanitizedAge}`);
              return { isValid: false, error: 'Formato de edad inválido.' };
         }
 
@@ -178,6 +178,20 @@ export async function onRequestPost({ request, env }) {
         data.email = sanitizedEmail;
         // --- FIN: Validaciones y Sanitización para 'email' ---
 
+        // --- INICIO: Validación de edad ---
+        const ageValidation = isValidAge(data.age);
+        if (!ageValidation.isValid) {
+            return new Response(JSON.stringify({
+                error: ageValidation.error
+            }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        // Usar el valor validado y sanitizado
+        data.age = ageValidation.value;
+        // --- FIN: Validación de edad ---
+
 
         // Validaciones básicas para otros campos obligatorios
         // Ya no necesitamos chequear data.email aquí porque lo hicimos antes
@@ -202,7 +216,8 @@ export async function onRequestPost({ request, env }) {
             const userResult = await tx.execute({
                 sql: "INSERT INTO users (name, email, age) VALUES (?, ?, ?) RETURNING id;",
                 // Usar los datos sanitizados
-                args: [data.name, data.email, data.age ?? null],
+                // args: [data.name, data.email, data.age ?? null],
+                args: [data.name, data.email, data.age],
             });
             const userId = userResult.rows[0].id;
 
