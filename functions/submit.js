@@ -71,6 +71,11 @@ function isValidAge(age) {
     // If present, it must be a number or a string representing an integer
     let parsedAge;
     if (typeof age === 'number') {
+        // Verificar si es Infinity o -Infinity
+        if (!Number.isFinite(age)) {
+            console.warn(`Tipo de edad inválido: se proporcionó un valor infinito (${age})`);
+            return { isValid: false, error: 'La edad debe ser un número entero válido.' };
+        }
         if (!Number.isInteger(age)) {
             console.warn(`Invalid age type: float number provided (${age})`);
             return { isValid: false, error: 'La edad debe ser un número entero.' };
