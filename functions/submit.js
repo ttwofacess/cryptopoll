@@ -169,15 +169,54 @@ export async function onRequestPost({ request, env }) {
         data.age = ageValidation.value;
         // --- FIN: Validación de edad ---
 
+        // --- START: Validation for Favorite Cryptocurrency (role/dropdown) ---
+        const allowedCryptoValues = new Set([
+            'bitcoin',
+            'ethereum',
+            'litecoin', 
+            'binance-coin',
+            'solana',
+            'other'
+        ]);
+        const selectedCrypto = data.role;
 
-        // Validaciones básicas para otros campos obligatorios
-        // Ya no necesitamos chequear data.email aquí porque lo hicimos antes
-        if (!data.role) { // data.name y data.email ya fueron validados
-             return new Response(JSON.stringify({ error: 'Falta campo obligatorio (cripto favorita).' }), {
+        // Check if it's a non-empty string first
+        if (typeof selectedCrypto !== 'string' || selectedCrypto.trim() === '') {
+             console.warn(`Invalid or missing cryptocurrency selection: received type ${typeof selectedCrypto}, value "${selectedCrypto}"`);
+             return new Response(JSON.stringify({
+                 error: 'Selección de criptomoneda favorita inválida o faltante. Por favor, elige una opción de la lista.'
+             }), {
                 status: 400,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
+
+        // Trim and check against the allowed set
+        const trimmedCrypto = selectedCrypto.trim(); // Trim just in case, though unlikely needed here
+        if (!allowedCryptoValues.has(trimmedCrypto)) {
+            console.warn(`Invalid cryptocurrency value submitted: "${trimmedCrypto}"`);
+            return new Response(JSON.stringify({
+                 // Be specific but don't reflect the invalid input directly back in the main error message
+                 // to avoid potential reflection issues, though less likely here.
+                 error: `La selección de criptomoneda favorita no es válida. Por favor, elige una de las opciones proporcionadas.`
+             }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        // Use the validated (and potentially trimmed) value
+        data.role = trimmedCrypto;
+        // --- END: Validation for Favorite Cryptocurrency (role/dropdown) ---
+
+        // Validaciones básicas para otros campos obligatorios
+        // Ya no necesitamos chequear data.email aquí porque lo hicimos antes
+        // The old basic check is no longer needed here as the dropdown validation is more specific
+        /* if (!data.role) { // data.name y data.email ya fueron validados
+             return new Response(JSON.stringify({ error: 'Falta campo obligatorio (cripto favorita).' }), {
+                status: 400,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        } */
         // (Opcional) Podrías añadir validaciones similares para age, etc.
 
         // 2. Crear cliente de Turso
@@ -211,20 +250,40 @@ export async function onRequestPost({ request, env }) {
             }
 
             if (data.prefer && data.prefer.length > 0) {
+                // Optional: Add validation for checkbox values too if needed
+                const allowedCharacteristics = new Set(['security', 'scalability', 'decentralization', 'transaction-speed', 'community']);
                 for (const characteristic of data.prefer) {
-                    await tx.execute({
-                        sql: "INSERT INTO valued_characteristics (user_id, characteristic) VALUES (?, ?);",
-                        args: [userId, characteristic],
-                    });
+                    if (typeof characteristic === 'string' && allowedCharacteristics.has(characteristic.trim())) {
+                        await tx.execute({
+                            sql: "INSERT INTO valued_characteristics (user_id, characteristic) VALUES (?, ?);",
+                            args: [userId, characteristic.trim()],
+                        });
+                    } else {
+                        console.warn(`Skipping invalid characteristic value: ${characteristic}`);
+                      }
                 }
             }
 
-            if (data.comment && data.comment.trim() !== '') {
+            // if (data.comment && data.comment.trim() !== '') {
+            if (data.comment && typeof data.comment === 'string' && data.comment.trim() !== '') {
+                // Optional: Add length validation for comment if desired
+                const trimmedComment = data.comment.trim();
+                // Example: Limit comment length
+                // const maxCommentLength = 1000;
+                // if (trimmedComment.length > maxCommentLength) {
+                //     // Handle error or truncate - decide strategy
+                //     console.warn(`Comment too long, truncating.`);
+                //     trimmedComment = trimmedComment.substring(0, maxCommentLength);
+                // }
                  await tx.execute({
                     sql: "INSERT INTO comments (user_id, comment) VALUES (?, ?);",
-                    args: [userId, data.comment.trim()],
+                    // args: [userId, data.comment.trim()],
+                    args: [userId, trimmedComment], // Use trimmed comment
                 });
-            }
+            } else if (data.comment) {
+                // Log if comment exists but is not a string or is empty after trimming
+                console.warn(`Received comment is not a non-empty string: type ${typeof data.comment}`);
+              }
 
             await tx.commit();
 
@@ -251,11 +310,11 @@ export async function onRequestPost({ request, env }) {
          let errorStatus = 500;
          if (error instanceof SyntaxError) {
              errorMessage = 'Error en el formato del JSON enviado.';
-             errorStatus = 400;
-         } else if (error.message.includes('invalid name') || error.message.includes('invalid email')) { // Ejemplo si lanzaras errores específicos
+             errorStatus = 400; // No need for specific name/email error checks here as they are handled above
+         } /* else if (error.message.includes('invalid name') || error.message.includes('invalid email')) { // Ejemplo si lanzaras errores específicos
              errorMessage = error.message;
              errorStatus = 400;
-         }
+         } */
 
          return new Response(JSON.stringify({ error: errorMessage, details: error.message }), {
             status: errorStatus,
