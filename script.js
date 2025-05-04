@@ -132,8 +132,25 @@ document.getElementById('survey-form').addEventListener('submit', async function
     data.email = data.email.trim(); // Ya validado y trimeado antes
     data.age = data.age || null;
     data.comment = data.comment ? data.comment.trim() : null; // Trim si existe
-    data.frequency = data.frequency || null;
+    //data.frequency = data.frequency || null;
     data.prefer = data.prefer || [];
+
+    // --- START: Client-Side Validation for Frequency ---
+    const frequencyValue = data.frequency; // Puede ser undefined si no se seleccionó nada
+    const allowedFrequencies = ['daily', 'weekly', 'monthly', 'rarely'];
+
+    // Solo validamos si se envió un valor (es opcional)
+    if (frequencyValue && !allowedFrequencies.includes(frequencyValue)) {
+        alert('Por favor, selecciona una opción válida para la frecuencia de inversión.');
+        submitButton.disabled = false;
+        submitButton.textContent = originalButtonText;
+        // Intentar enfocar el primer radio de frecuencia
+        const firstRadio = document.querySelector('input[name="frequency"]');
+        if (firstRadio) firstRadio.focus();
+        return; // Detener el envío
+    }
+    // --- END: Client-Side Validation for Frequency ---
+
 
     try {
         // 2. Enviar datos a la Cloudflare Function en /submit

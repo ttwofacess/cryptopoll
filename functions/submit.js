@@ -211,13 +211,87 @@ export async function onRequestPost({ request, env }) {
         // Validaciones básicas para otros campos obligatorios
         // Ya no necesitamos chequear data.email aquí porque lo hicimos antes
         // The old basic check is no longer needed here as the dropdown validation is more specific
-        /* if (!data.role) { // data.name y data.email ya fueron validados
-             return new Response(JSON.stringify({ error: 'Falta campo obligatorio (cripto favorita).' }), {
-                status: 400,
-                headers: { 'Content-Type': 'application/json' },
-            });
-        } */
-        // (Opcional) Podrías añadir validaciones similares para age, etc.
+
+        // --- START: Server-Side Validation for Frequency ---
+        const allowedFrequencyValues = new Set(['daily', 'weekly', 'monthly', 'rarely']);
+        let validatedFrequency = null; // Default a null si es opcional y no se envía o está vacío
+
+        if (data.frequency !== null && data.frequency !== undefined) {
+            // 1. Check type: Must be a string if provided
+            if (typeof data.frequency !== 'string') {
+                console.warn(`Invalid frequency type: received type ${typeof data.frequency}`);
+                return new Response(JSON.stringify({ error: 'Tipo de dato inválido para la frecuencia de inversión.' }), {
+                    status: 400,
+                    headers: { 'Content-Type': 'application/json' },
+                });
+            }
+
+            // 2. Sanitize: Trim whitespace
+            const trimmedFrequency = data.frequency.trim();
+
+            // 3. Validate: Check if the trimmed value is in the allowed set (only if it's not empty)
+            if (trimmedFrequency !== '') { // Allow empty string after trim to be treated as null/not provided
+                if (!allowedFrequencyValues.has(trimmedFrequency)) {
+                    console.warn(`Invalid frequency value submitted: "${trimmedFrequency}"`);
+                    return new Response(JSON.stringify({ error: 'La selección de frecuencia de inversión no es válida. Por favor, elige una de las opciones proporcionadas.' }), {
+                        status: 400,
+                        headers: { 'Content-Type': 'application/json' },
+                    });
+                }
+                // If valid and not empty, use the trimmed value
+                validatedFrequency = trimmedFrequency;
+            }
+            // If the original string trimmed to empty, validatedFrequency remains null
+        }
+        // Update data.frequency with the validated value (could be null or a valid string)
+        data.frequency = validatedFrequency;
+        // --- END: Server-Side Validation for Frequency ---
+
+        // --- START: Validation for Valued Characteristics (Checkboxes) ---
+        let validatedCharacteristics = [];
+        if (data.prefer && Array.isArray(data.prefer) && data.prefer.length > 0) {
+            const allowedCharacteristics = new Set(['security', 'scalability', 'decentralization', 'transaction-speed', 'community']);
+            for (const characteristic of data.prefer) {
+                 // Ensure each item is a string and is one of the allowed values
+                if (typeof characteristic === 'string' && allowedCharacteristics.has(characteristic.trim())) {
+                    validatedCharacteristics.push(characteristic.trim());
+                } else {
+                    console.warn(`Skipping invalid characteristic value: ${characteristic}`);
+                    // Decide if you want to reject the whole submission or just skip the invalid ones.
+                    // Skipping is generally more user-friendly for optional multi-selects.
+                    // If you want to reject, uncomment the line below:
+                    // return new Response(JSON.stringify({ error: `Valor inválido encontrado en las características valoradas: ${characteristic}` }), { status: 400, headers: { 'Content-Type': 'application/json' } });
+                }
+            }
+        }
+        // Use the validated array
+        data.prefer = validatedCharacteristics; // Could be an empty array []
+        // --- END: Validation for Valued Characteristics ---
+
+
+        // --- START: Validation/Sanitization for Comment ---
+        let validatedComment = null;
+        if (data.comment !== null && data.comment !== undefined) {
+            if (typeof data.comment !== 'string') {
+                 console.warn(`Invalid comment type: received type ${typeof data.comment}`);
+                 // Decide whether to reject or just ignore. Ignoring might be better for optional text.
+            } else {
+                const trimmedComment = data.comment.trim();
+                if (trimmedComment !== '') {
+                    // Optional: Add length check
+                    const maxCommentLength = 1000; // Example limit
+                    if (trimmedComment.length > maxCommentLength) {
+                         console.warn(`Comment too long, truncating.`);
+                         validatedComment = trimmedComment.substring(0, maxCommentLength);
+                    } else {
+                         validatedComment = trimmedComment;
+                    }
+                }
+            }
+        }
+        data.comment = validatedComment; // Update data object
+        // --- END: Validation/Sanitization for Comment ---
+
 
         // 2. Crear cliente de Turso
         const client = createClient({
@@ -249,8 +323,7 @@ export async function onRequestPost({ request, env }) {
                 });
             }
 
-            if (data.prefer && data.prefer.length > 0) {
-                // Optional: Add validation for checkbox values too if needed
+            /* if (data.prefer && data.prefer.length > 0) {
                 const allowedCharacteristics = new Set(['security', 'scalability', 'decentralization', 'transaction-speed', 'community']);
                 for (const characteristic of data.prefer) {
                     if (typeof characteristic === 'string' && allowedCharacteristics.has(characteristic.trim())) {
@@ -264,26 +337,35 @@ export async function onRequestPost({ request, env }) {
                 }
             }
 
-            // if (data.comment && data.comment.trim() !== '') {
             if (data.comment && typeof data.comment === 'string' && data.comment.trim() !== '') {
-                // Optional: Add length validation for comment if desired
                 const trimmedComment = data.comment.trim();
-                // Example: Limit comment length
-                // const maxCommentLength = 1000;
-                // if (trimmedComment.length > maxCommentLength) {
-                //     // Handle error or truncate - decide strategy
-                //     console.warn(`Comment too long, truncating.`);
-                //     trimmedComment = trimmedComment.substring(0, maxCommentLength);
-                // }
                  await tx.execute({
                     sql: "INSERT INTO comments (user_id, comment) VALUES (?, ?);",
-                    // args: [userId, data.comment.trim()],
                     args: [userId, trimmedComment], // Use trimmed comment
                 });
             } else if (data.comment) {
                 // Log if comment exists but is not a string or is empty after trimming
                 console.warn(`Received comment is not a non-empty string: type ${typeof data.comment}`);
-              }
+              } */
+
+            // Insertar características valoradas (si existen)
+            // data.prefer ahora contiene solo valores válidos o []
+            if (data.prefer.length > 0) {
+                for (const characteristic of data.prefer) {
+                    await tx.execute({
+                        sql: "INSERT INTO valued_characteristics (user_id, characteristic) VALUES (?, ?);",
+                        args: [userId, characteristic], // characteristic ya está validado y trimeado
+                    });
+                }
+            }
+
+            // Insertar comentario SI SE PROPORCIONÓ Y ES VÁLIDO
+            if (data.comment) { // data.comment ahora contiene null o un comentario validado/trimeado/truncado
+                 await tx.execute({
+                    sql: "INSERT INTO comments (user_id, comment) VALUES (?, ?);",
+                    args: [userId, data.comment],
+                });
+            }
 
             await tx.commit();
 
@@ -311,10 +393,7 @@ export async function onRequestPost({ request, env }) {
          if (error instanceof SyntaxError) {
              errorMessage = 'Error en el formato del JSON enviado.';
              errorStatus = 400; // No need for specific name/email error checks here as they are handled above
-         } /* else if (error.message.includes('invalid name') || error.message.includes('invalid email')) { // Ejemplo si lanzaras errores específicos
-             errorMessage = error.message;
-             errorStatus = 400;
-         } */
+         } 
 
          return new Response(JSON.stringify({ error: errorMessage, details: error.message }), {
             status: errorStatus,
