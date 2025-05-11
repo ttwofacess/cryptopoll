@@ -119,6 +119,32 @@ function isValidAge(age) {
 }
 // --- END: Age Validation Function (Server-Side) ---
 
+// --- START: HTML Sanitization Function ---
+function sanitizeHTMLWithJS(text) {
+    if (!text) return text;
+    
+    // Crear un elemento temporal (no se añade al DOM)
+    const tempElement = {
+        innerHTML: '',
+        textContent: ''
+    };
+    
+    // Asignar el texto al textContent para escapar HTML
+    tempElement.textContent = text;
+    
+    // Obtener el texto escapado
+    const sanitizedText = tempElement.textContent;
+    
+    // Alternativa más directa: reemplazar caracteres especiales con entidades HTML
+    return sanitizedText
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#39;");
+}
+// --- END: HTML Sanitization Function ---
+
 export async function onRequestPost({ request, env }) {
     try {
         const data = await request.json();
@@ -278,13 +304,21 @@ export async function onRequestPost({ request, env }) {
             } else {
                 const trimmedComment = data.comment.trim();
                 if (trimmedComment !== '') {
+                    // Sanitización HTML con JavaScript puro
+                    const sanitizedComment = sanitizeHTMLWithJS(trimmedComment);
                     // Optional: Add length check
                     const maxCommentLength = 1000; // Example limit
-                    if (trimmedComment.length > maxCommentLength) {
+                    /* if (trimmedComment.length > maxCommentLength) {
                          console.warn(`Comment too long, truncating.`);
                          validatedComment = trimmedComment.substring(0, maxCommentLength);
                     } else {
                          validatedComment = trimmedComment;
+                    } */
+                    if (sanitizedComment.length > maxCommentLength) {
+                        console.warn(`Comment too long, truncating.`);
+                        validatedComment = sanitizedComment.substring(0, maxCommentLength);
+                    } else {
+                        validatedComment = sanitizedComment;
                     }
                 }
             }
