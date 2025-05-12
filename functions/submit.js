@@ -1,6 +1,42 @@
 // functions/submit.js
 import { createClient } from "@libsql/client";
 
+// --- START: Crypto Helper Functions ---
+async function getKeyMaterial(secretKeyBase64) {
+    const keyBuffer = Uint8Array.from(atob(secretKeyBase64), c => c.charCodeAt(0));
+    return crypto.subtle.importKey(
+        "raw",
+        keyBuffer,
+        { name: "AES-GCM" },
+        false, // not extractable
+        ["encrypt", "decrypt"]
+    );
+}
+
+async function encryptEmail(email, secretKeyBase64) {
+    if (!secretKeyBase64) {
+        throw new Error("ENCRYPTION_KEY is not set.");
+    }
+    const key = await getKeyMaterial(secretKeyBase64);
+    const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for AES-GCM
+    const encodedEmail = new TextEncoder().encode(email);
+
+    const ciphertext = await crypto.subtle.encrypt(
+        { name: "AES-GCM", iv: iv },
+        key,
+        encodedEmail
+    );
+
+    // Prepend IV to ciphertext and then Base64 encode
+    const ivAndCiphertext = new Uint8Array(iv.length + ciphertext.byteLength);
+    ivAndCiphertext.set(iv);
+    ivAndCiphertext.set(new Uint8Array(ciphertext), iv.length);
+
+    return btoa(String.fromCharCode.apply(null, ivAndCiphertext));
+}
+
+// --- END: Crypto Helper Functions ---
+
 // --- START: Email Validation Function ---
 function isValidEmail(email) {
     if (!email || typeof email !== 'string') {
@@ -148,6 +184,17 @@ function sanitizeHTMLWithJS(text) {
 export async function onRequestPost({ request, env }) {
     try {
         const data = await request.json();
+        const ENCRYPTION_KEY = env.ENCRYPTION_KEY;
+
+        if (!ENCRYPTION_KEY) {
+            console.error("ENCRYPTION_KEY is not configured in environment variables.");
+            return new Response(JSON.stringify({
+                error: 'Error de configuración del servidor. No se puede procesar la solicitud.'
+            }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
 
         // --- INICIO: Validaciones y Sanitización para 'name' ---
         const sanitizedName = data.name === null ? null :
@@ -178,8 +225,24 @@ export async function onRequestPost({ request, env }) {
             });
         }
         // Usar el email sanitizado de ahora en adelante
-        data.email = sanitizedEmail;
+        //data.email = sanitizedEmail;
         // --- FIN: Validaciones y Sanitización para 'email' ---
+
+        // --- INICIO: Cifrado de 'email' ---
+        let encryptedEmail;
+        try {
+            encryptedEmail = await encryptEmail(plainTextEmail, ENCRYPTION_KEY);
+        } catch (encryptionError) {
+            console.error("Email encryption failed:", encryptionError);
+            return new Response(JSON.stringify({
+                error: 'Error al procesar el correo electrónico de forma segura.'
+            }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        data.email = encryptedEmail; // Reemplazar el email en texto plano con el cifrado
+        // --- FIN: Cifrado de 'email' ---
 
         // --- INICIO: Validación de edad ---
         const ageValidation = isValidAge(data.age);
@@ -357,30 +420,6 @@ export async function onRequestPost({ request, env }) {
                 });
             }
 
-            /* if (data.prefer && data.prefer.length > 0) {
-                const allowedCharacteristics = new Set(['security', 'scalability', 'decentralization', 'transaction-speed', 'community']);
-                for (const characteristic of data.prefer) {
-                    if (typeof characteristic === 'string' && allowedCharacteristics.has(characteristic.trim())) {
-                        await tx.execute({
-                            sql: "INSERT INTO valued_characteristics (user_id, characteristic) VALUES (?, ?);",
-                            args: [userId, characteristic.trim()],
-                        });
-                    } else {
-                        console.warn(`Skipping invalid characteristic value: ${characteristic}`);
-                      }
-                }
-            }
-
-            if (data.comment && typeof data.comment === 'string' && data.comment.trim() !== '') {
-                const trimmedComment = data.comment.trim();
-                 await tx.execute({
-                    sql: "INSERT INTO comments (user_id, comment) VALUES (?, ?);",
-                    args: [userId, trimmedComment], // Use trimmed comment
-                });
-            } else if (data.comment) {
-                // Log if comment exists but is not a string or is empty after trimming
-                console.warn(`Received comment is not a non-empty string: type ${typeof data.comment}`);
-              } */
 
             // Insertar características valoradas (si existen)
             // data.prefer ahora contiene solo valores válidos o []
