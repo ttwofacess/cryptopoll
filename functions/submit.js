@@ -231,7 +231,8 @@ export async function onRequestPost({ request, env }) {
         // --- INICIO: Cifrado de 'email' ---
         let encryptedEmail;
         try {
-            encryptedEmail = await encryptEmail(plainTextEmail, ENCRYPTION_KEY);
+            // encryptedEmail = await encryptEmail(plainTextEmail, ENCRYPTION_KEY);
+            encryptedEmail = await encryptEmail(sanitizedEmail, ENCRYPTION_KEY);
         } catch (encryptionError) {
             console.error("Email encryption failed:", encryptionError);
             return new Response(JSON.stringify({
