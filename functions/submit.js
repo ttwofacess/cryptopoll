@@ -13,18 +13,22 @@ async function getKeyMaterial(secretKeyBase64) {
     );
 }
 
-async function encryptEmail(email, secretKeyBase64) {
+// async function encryptEmail(email, secretKeyBase64) {
+// RENAMED and GENERALIZED from encryptEmail
+async function encryptString(plainText, secretKeyBase64) {
     if (!secretKeyBase64) {
         throw new Error("ENCRYPTION_KEY is not set.");
     }
     const key = await getKeyMaterial(secretKeyBase64);
     const iv = crypto.getRandomValues(new Uint8Array(12)); // 96-bit IV for AES-GCM
-    const encodedEmail = new TextEncoder().encode(email);
+    // const encodedEmail = new TextEncoder().encode(email);
+    const encodedText = new TextEncoder().encode(plainText); // Use plainText parameter
 
     const ciphertext = await crypto.subtle.encrypt(
         { name: "AES-GCM", iv: iv },
         key,
-        encodedEmail
+        // encodedEmail
+        encodedText // Use encodedText
     );
 
     // Prepend IV to ciphertext and then Base64 encode
@@ -197,10 +201,15 @@ export async function onRequestPost({ request, env }) {
         }
 
         // --- INICIO: Validaciones y Sanitización para 'name' ---
-        const sanitizedName = data.name === null ? null :
+        // const sanitizedName = data.name === null ? null :
+        // Nota: la sanitización HTML no se suele aplicar a nombres, pero el trim es importante.
+        // Si el nombre pudiera contener HTML malicioso y se muestra en algún sitio, entonces sí.
+        // Por ahora, solo trim y validación de caracteres.
+        const rawName = data.name === null ? null :
             (typeof data.name === 'string' ? data.name.trim() : String(data.name).trim());
 
-        if (!isValidName(sanitizedName)) {
+        // if (!isValidName(sanitizedName)) {
+        if (!isValidName(rawName)) {
              return new Response(JSON.stringify({
                  error: 'Nombre inválido. Asegúrate de que no esté vacío, no exceda los 100 caracteres y contenga caracteres válidos.'
              }), {
@@ -208,15 +217,36 @@ export async function onRequestPost({ request, env }) {
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-        data.name = sanitizedName; // Usar nombre sanitizado
+        //data.name = sanitizedName; // Usar nombre sanitizado
+        // El nombre validado y saneado es rawName
         // --- FIN: Validaciones y Sanitización para 'name' ---
+
+        // --- INICIO: Cifrado de 'name' ---
+        let encryptedName;
+        try {
+            // Cifrar rawName (que ya está trimeado y validado)
+            encryptedName = await encryptString(rawName, ENCRYPTION_KEY);
+        } catch (encryptionError) {
+            console.error("Name encryption failed:", encryptionError);
+            return new Response(JSON.stringify({
+                error: 'Error al procesar el nombre de forma segura.'
+            }), {
+                status: 500,
+                headers: { 'Content-Type': 'application/json' },
+            });
+        }
+        // data.name ahora contendrá el nombre cifrado
+        data.name = encryptedName;
+        // --- FIN: Cifrado de 'name' ---
 
         // --- INICIO: Validaciones y Sanitización para 'email' ---
         // Sanitización básica: verificar que sea string y quitar espacios
-        const sanitizedEmail = typeof data.email === 'string' ? data.email.trim() : null;
+        // const sanitizedEmail = typeof data.email === 'string' ? data.email.trim() : null;
+        const rawEmail = typeof data.email === 'string' ? data.email.trim() : null;
 
         // Validación
-        if (!isValidEmail(sanitizedEmail)) {
+        // if (!isValidEmail(sanitizedEmail)) {
+        if (!isValidEmail(rawEmail)) {
             return new Response(JSON.stringify({
                 error: 'Correo electrónico inválido. Por favor, introduce un formato de email válido (ej. usuario@dominio.com) y asegúrate de que no exceda los 254 caracteres.'
             }), {
@@ -224,15 +254,15 @@ export async function onRequestPost({ request, env }) {
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-        // Usar el email sanitizado de ahora en adelante
-        //data.email = sanitizedEmail;
+        // El email validado y saneado es rawEmail
         // --- FIN: Validaciones y Sanitización para 'email' ---
 
         // --- INICIO: Cifrado de 'email' ---
         let encryptedEmail;
         try {
-            // encryptedEmail = await encryptEmail(plainTextEmail, ENCRYPTION_KEY);
-            encryptedEmail = await encryptEmail(sanitizedEmail, ENCRYPTION_KEY);
+            // encryptedEmail = await encryptEmail(sanitizedEmail, ENCRYPTION_KEY);
+            // Usar la función generalizada encryptString con rawEmail
+            encryptedEmail = await encryptString(rawEmail, ENCRYPTION_KEY);
         } catch (encryptionError) {
             console.error("Email encryption failed:", encryptionError);
             return new Response(JSON.stringify({
